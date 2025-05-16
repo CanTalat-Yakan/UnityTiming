@@ -16,8 +16,9 @@ All utilities are under the `UnityEssentials` namespace. This keeps your project
 using UnityEssentials;
 ```
 
+# Timing Script
 
-## Use Case Examples for Timing Script
+## Usage Examples
 
 Each snippet below demonstrates a distinct usage scenario:
 
