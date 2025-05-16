@@ -1,0 +1,16 @@
+{
+    "name": "UnityEssentials.Timings",
+    "rootNamespace": "UnityEssentials",
+    "references": [
+        "GUID:31005776ba0ea9c4bb2ee78cca2f6886"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
