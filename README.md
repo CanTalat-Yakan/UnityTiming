@@ -16,12 +16,12 @@ All utilities are under the `UnityEssentials` namespace. This keeps your project
 using UnityEssentials;
 ```
 
+
 ## Use Case Examples for Timing Script
 
 Each snippet below demonstrates a distinct usage scenario:
 
 
----
 1. Basic Coroutine Execution in Update Segment
 ```csharp
 using UnityEngine;
@@ -45,7 +45,7 @@ public class BasicUpdateCoroutine : MonoBehaviour
 }
 ```
 
----
+
 2. FixedUpdate Coroutine (e.g., physics or time-critical logic)
 ```csharp
 public class PhysicsCoroutine : MonoBehaviour
@@ -67,7 +67,7 @@ public class PhysicsCoroutine : MonoBehaviour
 
 ```
 
----
+
 3. LateUpdate Coroutine (e.g., camera logic or post-frame logic)
 
 ```csharp
@@ -90,7 +90,6 @@ public class PostFrameRoutine : MonoBehaviour
 
 ```
 
----
 
 4. SlowUpdate Coroutine (e.g., infrequent operations)
 ```csharp
@@ -114,7 +113,6 @@ public class SlowTask : MonoBehaviour
 
 ```
 
----
 
 5. Coroutine Cancellation
 ```csharp
@@ -147,7 +145,6 @@ public class CancellableCoroutine : MonoBehaviour
 
 ```
 
----
 
 6. Replacement Function Use
 ```csharp
@@ -175,7 +172,6 @@ public class CoroutineReplacementExample : MonoBehaviour
 
 ```
 
----
 
 7. OnPreExecute Hook
 ```csharp
@@ -200,7 +196,6 @@ public class PreExecuteLogger : MonoBehaviour
 
 ```
 
----
 
 8. Accessing Timing Data
 ```csharp
@@ -215,7 +210,6 @@ public class TimeAccess : MonoBehaviour
 
 ```
 
----
 
 9. Tracking Current Coroutine Handle
 ```csharp
@@ -236,7 +230,6 @@ public class CurrentCoroutineTest : MonoBehaviour
 
 ```
 
----
 
 These cover coroutine scheduling, segmentation, timing access, lifecycle control, and extension points.
 
