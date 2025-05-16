@@ -17,6 +17,8 @@ using UnityEssentials;
 ```
 
 # Timing
+These cover coroutine scheduling, segmentation, timing access, lifecycle control, and extension points.
+
 
 ## Usage Examples
 
@@ -230,7 +232,3 @@ public class CurrentCoroutineTest : MonoBehaviour
 }
 
 ```
-
-
-These cover coroutine scheduling, segmentation, timing access, lifecycle control, and extension points.
-
