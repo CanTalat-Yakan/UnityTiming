@@ -1,17 +1,17 @@
 {
-    "name": "com.unityessentials.timings",
-    "version": "1.0.0",
-    "displayName": "UnityEssenstials Timings",
-    "description": "This is a part of the UnityEssentials Ecosystem",
-    "unity": "2022.1",
-    "documentationUrl": "",
-    "changelogUrl": "",
-    "licensesUrl": "",
-    "dependencyList": [],
-    "keywords": [],
-    "author": {
-        "name": "Unity Essentials",
-        "email": "",
-        "url": ""
-    }
+  "name": "com.unityessentials.timings",
+  "version": "1.0.0",
+  "displayName": "UnityEssenstials Timings",
+  "description": "This is a part of the UnityEssentials Ecosystem",
+  "unity": "2022.1",
+  "documentationUrl": "",
+  "changelogUrl": "",
+  "licensesUrl": "",
+  "dependencies": { "com.unityessentials.essentials": "1.0.0" },
+  "keywords": [],
+  "author": {
+    "name": "Unity Essentials",
+    "email": "",
+    "url": ""
+  }
 }
