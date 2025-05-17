@@ -28,6 +28,15 @@ Robust coroutine management system with segment-based execution, precise timing 
 - Coroutine replacement system
 - Instance-based lifecycle management
 
+
+##Best Practices
+
+- Use yield return 0 for frame-by-frame logic
+- Pre-calculate wait durations outside loops
+- Use KillCoroutine instead of null checks
+- Leverage segments for proper execution order
+- Use WaitUntil for event-driven logic
+
 ## Usage Examples
 
 Each snippet below demonstrates a distinct usage scenario:
@@ -207,18 +216,3 @@ public class ContextAwareCoroutine : MonoBehaviour
     }
 }
 ```
-
-##Key Features
--yield return 0 - Execute next frame (Update segment)
--yield return Timing.WaitUntil(() => condition) - Pause until condition met
--while(condition) { yield return 0; } - Frame-perfect conditional looping
--Cross-segment coordination
--Precise timeout handling
--Efficient resource polling strategies
-
-##Best Practices
--Use yield return 0 for frame-by-frame logic
--Pre-calculate wait durations outside loops
--Use KillCoroutine instead of null checks
--Leverage segments for proper execution order
--Use WaitUntil for event-driven logic
