@@ -37,8 +37,7 @@ Frame-by-frame execution with precise timing control:
 ```csharp
 public class BasicCoroutine : MonoBehaviour
 {
-    void Start() =>
-        Timing.RunCoroutine(MyRoutine());
+    void Start() => Timing.RunCoroutine(MyRoutine());
 
     IEnumerator<float> MyRoutine()
     {
@@ -54,8 +53,7 @@ public class BasicCoroutine : MonoBehaviour
 ```csharp
 public class PhysicsCoroutine : MonoBehaviour
 {
-    void Start() =>
-        Timing.RunCoroutine(PhysicsRoutine(), Segment.FixedUpdate);
+    void Start() => Timing.RunCoroutine(PhysicsRoutine(), Segment.FixedUpdate);
 
     IEnumerator<float> PhysicsRoutine()
     {
@@ -73,8 +71,7 @@ public class PhysicsCoroutine : MonoBehaviour
 ```csharp
 public class CameraController : MonoBehaviour
 {
-    void Start() =>
-        Timing.RunCoroutine(PostFrameLogic(), Segment.LateUpdate);
+    void Start() => Timing.RunCoroutine(PostFrameLogic(), Segment.LateUpdate);
 
     IEnumerator<float> PostFrameLogic()
     {
@@ -92,8 +89,7 @@ public class CameraController : MonoBehaviour
 ```csharp
 public class SlowOperations : MonoBehaviour
 {
-    void Start() =>
-        Timing.RunCoroutine(InfrequentChecks(), Segment.SlowUpdate);
+    void Start() => Timing.RunCoroutine(InfrequentChecks(), Segment.SlowUpdate);
 
     IEnumerator<float> InfrequentChecks()
     {
@@ -169,10 +165,7 @@ public class ExecutionMonitor : MonoBehaviour
     void OnEnable() => Timing.OnPreExecute += LogPreUpdate;
     void OnDisable() => Timing.OnPreExecute -= LogPreUpdate;
 
-    void LogPreUpdate()
-    {
-        Debug.Log($"Segment about to execute at {Timing.LocalTime}");
-    }
+    void LogPreUpdate() => Debug.Log($"Segment about to execute at {Timing.LocalTime}");
 }
 ```
 
@@ -181,10 +174,7 @@ public class ExecutionMonitor : MonoBehaviour
 ```csharp
 public class TimeDisplay : MonoBehaviour
 {
-    void Update()
-    {
-        Debug.Log($"Frame Time: {Timing.LocalTime:0.00}, Delta: {Timing.DeltaTime:0.000}");
-    }
+    void Update() => Debug.Log($"Frame Time: {Timing.LocalTime:0.00}, Delta: {Timing.DeltaTime:0.000}");
 }
 ```
 
@@ -193,10 +183,7 @@ public class TimeDisplay : MonoBehaviour
 ```csharp
 public class ContextAwareCoroutine : MonoBehaviour
 {
-    void Start()
-    {
-        Timing.RunCoroutine(HandleAwareRoutine());
-    }
+    void Start() => Timing.RunCoroutine(HandleAwareRoutine());
 
     IEnumerator<float> HandleAwareRoutine()
     {
@@ -206,3 +193,37 @@ public class ContextAwareCoroutine : MonoBehaviour
     }
 }
 ```
+
+10. Pause/Resume Control
+```csharp
+public class SimplePauseExample : MonoBehaviour
+{
+    private CoroutineHandle _countHandle;
+
+    void Start() => _countHandle = Timing.RunCoroutine(CountSeconds());
+
+    IEnumerator<float> CountSeconds()
+    {
+        int seconds = 0;
+        while (true)
+        {
+            Debug.Log($"Count: {seconds++}s");
+            yield return 1f;
+        }
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.P))
+        {
+            Timing.PauseCoroutine(_countHandle);
+            Debug.Log("Paused counting");
+        }
+        
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            Timing.ResumeCoroutine(_countHandle);
+            Debug.Log("Resumed counting");
+        }
+    }
+}
