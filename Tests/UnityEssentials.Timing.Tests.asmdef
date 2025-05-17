@@ -1,6 +1,6 @@
 {
     "name": "UnityEssentials.Timing.Tests",
-    "rootNamespace": "",
+    "rootNamespace": "UnityEssentials.Tests",
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
