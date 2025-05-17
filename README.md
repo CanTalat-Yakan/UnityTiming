@@ -19,7 +19,6 @@ using UnityEssentials;
 # Timing
 Robust coroutine management system with segment-based execution, precise timing control, and zero allocation performance.
 
-
 ## Features
 - Zero GC allocations during runtime
 - Frame-perfect timing control
@@ -27,15 +26,6 @@ Robust coroutine management system with segment-based execution, precise timing 
 - Pause/Resume functionality
 - Coroutine replacement system
 - Instance-based lifecycle management
-
-
-## Best Practices
-
-- Use yield return 0 for frame-by-frame logic
-- Pre-calculate wait durations outside loops
-- Use KillCoroutine instead of null checks
-- Leverage segments for proper execution order
-- Use WaitUntil for event-driven logic
 
 ## Usage Examples
 
