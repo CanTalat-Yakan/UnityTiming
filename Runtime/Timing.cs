@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
 
 namespace UnityEssentials
@@ -6,194 +6,174 @@ namespace UnityEssentials
     public partial class Timing : PersistentSingleton<Timing>
     {
         private const int ProcessArrayChunkSize = 64;
-        private const int InitialBufferSizeLarge = 256;
-        private const int InitialBufferSizeMedium = 64;
-        private const int InitialBufferSizeSmall = 8;
-
-        public static float LocalTime => Instance._localTime;
-        public static float DeltaTime => Instance._deltaTime;
-        public static CoroutineHandle CurrentCoroutine => Instance._currentCoroutine;
-        public static event System.Action OnPreExecute;
-
-        public readonly SegmentData[] _segments = new SegmentData[4];
-        private readonly Dictionary<CoroutineHandle, ProcessIndex> _handleToIndex = new();
-        private readonly Dictionary<ProcessIndex, CoroutineHandle> _indexToHandle = new();
-        public static System.Func<IEnumerator<float>, CoroutineHandle, IEnumerator<float>> ReplacementFunction;
+        private const int InitialBufferSize = 256;
         public const float WaitForOneFrame = float.NegativeInfinity;
 
-        private CoroutineHandle _currentCoroutine;
-        private float _localTime;
-        private float _deltaTime;
-        private byte _instanceID;
+        public static float LocalTime { get; private set; }
+        public static float DeltaTime { get; private set; }
 
         public struct CoroutineHandle
         {
-            private readonly int _id;
-            public bool IsValid => _id != 0;
-            public CoroutineHandle(byte id) => _id = id;
-
-            public static bool operator ==(CoroutineHandle a, CoroutineHandle b) => a._id == b._id;
-            public static bool operator !=(CoroutineHandle a, CoroutineHandle b) => a._id != b._id;
-            public override bool Equals(object obj) => obj is CoroutineHandle h && _id == h._id;
-            public override int GetHashCode() => _id;
+            public int Id;
+            public ushort Version;
+            public bool IsValid => Version > 0;
         }
 
-        private struct ProcessIndex
+        private struct ProcessData
         {
-            public Segment Segment;
-            public int Index;
+            public IEnumerator<float> Coroutine;
+            public float WaitUntil;
+            public bool Paused;
+            public bool Held;
+            public CoroutineHandle Handle;
         }
 
-        public class SegmentData
+        private struct SegmentData
         {
-            public IEnumerator<float>[] Processes;
-            public bool[] Paused;
-            public bool[] Held;
-            public float[] WaitUntil;
-            public int NextSlot;
-            public int LastSlot;
-            public float LastTime;
-            public int InitialSize;
-
-            public SegmentData(int size)
-            {
-                Processes = new IEnumerator<float>[size];
-                Paused = new bool[size];
-                Held = new bool[size];
-                WaitUntil = new float[size];
-                NextSlot = 0;
-                LastSlot = 0;
-                LastTime = 0f;
-                InitialSize = size;
-            }
-
-            public void Expand()
-            {
-                System.Array.Resize(ref Processes, Processes.Length + ProcessArrayChunkSize);
-                System.Array.Resize(ref Paused, Paused.Length + ProcessArrayChunkSize);
-                System.Array.Resize(ref Held, Held.Length + ProcessArrayChunkSize);
-                System.Array.Resize(ref WaitUntil, WaitUntil.Length + ProcessArrayChunkSize);
-            }
+            public ProcessData[] Processes;
+            public int Count;
+            public int Capacity;
+            public int FreeHead;
         }
+
+        private SegmentData[] _segments = new SegmentData[4];
+        private CoroutineHandle[] _handlePool = new CoroutineHandle[InitialBufferSize];
+        private int _freeHandleIndex = 0;
+        private ushort _currentVersion = 1;
 
         public override void Awake()
         {
             base.Awake();
-            InitializeSegments();
+            for (int i = 0; i < _segments.Length; i++)
+            {
+                _segments[i].Processes = new ProcessData[InitialBufferSize];
+                _segments[i].Capacity = InitialBufferSize;
+                _segments[i].FreeHead = -1;
+            }
+
+            // Initialize handle pool
+            for (int i = 0; i < _handlePool.Length; i++)
+                _handlePool[i] = new CoroutineHandle { Id = i, Version = 0 };
+        }
+
+        private CoroutineHandle GetHandle()
+        {
+            if (_freeHandleIndex >= _handlePool.Length)
+            {
+                System.Array.Resize(ref _handlePool, _handlePool.Length * 2);
+                for (int i = _freeHandleIndex; i < _handlePool.Length; i++)
+                    _handlePool[i] = new CoroutineHandle { Id = i, Version = 0 };
+            }
+
+            CoroutineHandle handle = _handlePool[_freeHandleIndex];
+            handle.Version = _currentVersion++;
+            _handlePool[_freeHandleIndex++] = handle;
+            return handle;
+        }
+
+        private void ReleaseHandle(CoroutineHandle handle)
+        {
+            if (handle.Id >= 0 && handle.Id < _handlePool.Length)
+            {
+                handle.Version++;
+                _handlePool[handle.Id] = handle;
+                _freeHandleIndex--;
+            }
+        }
+
+        public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update) =>
+            Instance.RunCoroutineInternal(coroutine, (int)segment);
+
+        private CoroutineHandle RunCoroutineInternal(IEnumerator<float> coroutine, int segmentIndex)
+        {
+            ref SegmentData segment = ref _segments[segmentIndex];
+            int processIndex;
+
+            if (segment.FreeHead >= 0)
+            {
+                processIndex = segment.FreeHead;
+                segment.FreeHead = (int)segment.Processes[processIndex].WaitUntil; // Reuse WaitUntil for free list
+            }
+            else
+            {
+                if (segment.Count >= segment.Capacity)
+                {
+                    segment.Capacity += ProcessArrayChunkSize;
+                    System.Array.Resize(ref segment.Processes, segment.Capacity);
+                }
+                processIndex = segment.Count++;
+            }
+
+            CoroutineHandle handle = GetHandle();
+            segment.Processes[processIndex] = new ProcessData
+            {
+                Coroutine = coroutine,
+                WaitUntil = 0f,
+                Handle = handle,
+                Paused = false,
+                Held = false
+            };
+
+            return handle;
         }
 
         public void Update() => ProcessSegment(Segment.Update);
         public void FixedUpdate() => ProcessSegment(Segment.FixedUpdate);
         public void LateUpdate() => ProcessSegment(Segment.LateUpdate);
 
-        public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update) =>
-            Instance.RunCoroutineInternal(coroutine, segment);
-
-        private void InitializeSegments()
+        private void ProcessSegment(Segment segment)
         {
-            _segments[(int)Segment.Update] = new(InitialBufferSizeLarge);
-            _segments[(int)Segment.FixedUpdate] = new(InitialBufferSizeMedium);
-            _segments[(int)Segment.LateUpdate] = new(InitialBufferSizeSmall);
-            _segments[(int)Segment.SlowUpdate] = new(InitialBufferSizeMedium);
-        }
-
-        public void ProcessSegment(Segment segment)
-        {
-            OnPreExecute?.Invoke();
-
-            ref var segmentData = ref _segments[(int)segment];
-            if (segmentData.NextSlot == 0) return;
-
+            int segmentIndex = (int)segment;
+            ref SegmentData segmentData = ref _segments[segmentIndex];
             UpdateTimeValues(segment);
-            segmentData.LastSlot = segmentData.NextSlot;
 
-            for (int i = 0; i < segmentData.LastSlot; i++)
+            for (int i = 0; i < segmentData.Count; i++)
             {
-                ProcessCoroutine(segment, ref segmentData, i);
-            }
+                if (segmentData.Processes[i].Coroutine == null) continue;
+                if (segmentData.Processes[i].Paused || segmentData.Processes[i].Held) continue;
+                if (LocalTime < segmentData.Processes[i].WaitUntil) continue;
 
-            _currentCoroutine = default;
-        }
-
-        private void ProcessCoroutine(Segment segment, ref SegmentData data, int index)
-        {
-            try
-            {
-                if (data.Processes[index] == null || data.Paused[index] || data.Held[index]) return;
-                if (data.WaitUntil[index] > data.LastTime) return;
-
-                _currentCoroutine = _indexToHandle[new ProcessIndex { Segment = segment, Index = index }];
-
-                if (!data.Processes[index].MoveNext())
-                    KillCoroutines(_currentCoroutine);
-                else
-                    UpdateWaitTime(data.Processes[index].Current, ref data, index);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e);
-                if (e is MissingReferenceException)
+                try
                 {
-                    Debug.LogError("Consider using CancelWith(gameObject) when starting coroutine.");
+                    if (!segmentData.Processes[i].Coroutine.MoveNext())
+                        KillCoroutine(segmentData.Processes[i].Handle);
+                    else
+                    {
+                        float current = segmentData.Processes[i].Coroutine.Current;
+                        segmentData.Processes[i].WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogException(ex);
+                    KillCoroutine(segmentData.Processes[i].Handle);
                 }
             }
         }
 
-        private void UpdateWaitTime(float waitValue, ref SegmentData data, int index)
-        {
-            if (float.IsNaN(waitValue))
-                HandleReplacement(ref data.Processes[index]);
-            else if (waitValue == WaitForOneFrame)
-                data.WaitUntil[index] = data.LastTime;
-            else if (waitValue >= 0f)
-                data.WaitUntil[index] = data.LastTime + waitValue;
-            else
-                data.WaitUntil[index] = data.LastTime;
-        }
-
         private void UpdateTimeValues(Segment segment)
         {
-            ref var data = ref _segments[(int)segment];
-            data.LastTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
-            _deltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
-            _localTime = data.LastTime;
+            DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
+            LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
         }
 
-        private CoroutineHandle RunCoroutineInternal(IEnumerator<float> coroutine, Segment segment)
+        public static void KillCoroutine(CoroutineHandle handle)
         {
-            if (coroutine == null) return default;
-
-            ref var data = ref _segments[(int)segment];
-            if (data.NextSlot >= data.Processes.Length) data.Expand();
-
-            var handle = new CoroutineHandle(_instanceID);
-            var processIndex = new ProcessIndex { Segment = segment, Index = data.NextSlot };
-
-            data.Processes[processIndex.Index] = coroutine;
-            data.WaitUntil[processIndex.Index] = 0f;
-
-            _handleToIndex[handle] = processIndex;
-            _indexToHandle[processIndex] = handle;
-
-            data.NextSlot++;
-            return handle;
-        }
-
-        private void HandleReplacement(ref IEnumerator<float> coroutine)
-        {
-            if (ReplacementFunction == null) return;
-
-            coroutine = ReplacementFunction(coroutine, _currentCoroutine);
-            ReplacementFunction = null;
-        }
-
-        public static void KillCoroutines(CoroutineHandle handle)
-        {
-            if (!Instance._handleToIndex.TryGetValue(handle, out var index)) return;
-
-            Instance._segments[(int)index.Segment].Processes[index.Index] = null;
-            Instance._handleToIndex.Remove(handle);
-            Instance._indexToHandle.Remove(index);
+            for (int s = 0; s < Instance._segments.Length; s++)
+            {
+                ref SegmentData segment = ref Instance._segments[s];
+                for (int i = 0; i < segment.Count; i++)
+                {
+                    if (segment.Processes[i].Handle.Equals(handle))
+                    {
+                        segment.Processes[i].Coroutine = null;
+                        segment.Processes[i].WaitUntil = segment.FreeHead;
+                        segment.FreeHead = i;
+                        Instance.ReleaseHandle(handle);
+                        return;
+                    }
+                }
+            }
         }
     }
 
