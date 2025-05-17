@@ -89,7 +89,6 @@ namespace UnityEssentials
                         return process.Coroutine != null;
             return false;
         }
-
     }
 
     public partial class Timing : PersistentSingleton<Timing>
