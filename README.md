@@ -29,7 +29,7 @@ Robust coroutine management system with segment-based execution, precise timing 
 - Instance-based lifecycle management
 
 
-##Best Practices
+## Best Practices
 
 - Use yield return 0 for frame-by-frame logic
 - Pre-calculate wait durations outside loops
