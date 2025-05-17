@@ -28,7 +28,7 @@ namespace UnityEssentials.Tests
         [TearDown]
         public void Teardown()
         {
-            _timing.KillAllCoroutines();
+            Timing.KillAllCoroutines();
             Object.DestroyImmediate(_timing);
         }
 
@@ -115,12 +115,12 @@ namespace UnityEssentials.Tests
             var handle = Timing.RunCoroutine(TestCoroutine());
             yield return null; // Wait for registration
 
-            Assert.IsTrue(Timing.Instance.IsCoroutineActive(handle));
+            Assert.IsTrue(Timing.IsCoroutineActive(handle));
 
             Timing.KillCoroutine(handle);
             yield return null; // Wait for cleanup
 
-            Assert.IsFalse(Timing.Instance.IsCoroutineActive(handle));
+            Assert.IsFalse(Timing.IsCoroutineActive(handle));
         }
 
         [UnityTest]
