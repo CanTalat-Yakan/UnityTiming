@@ -12,29 +12,6 @@ namespace UnityEssentials
         public static float LocalTime { get; private set; }
         public static float DeltaTime { get; private set; }
 
-        // Add this to your Timing class
-        public bool IsCoroutineActive(CoroutineHandle handle)
-        {
-            foreach (var segment in _segments)
-                foreach (var process in segment.Processes)
-                    if (process.Handle.Equals(handle))
-                        return process.Coroutine != null;
-            return false;
-        }
-
-        // Add this to your Timing class
-        public void KillAllCoroutines()
-        {
-            for (int i = _segments.Length - 1; i >= 0; i--)
-            {
-                SegmentData segment = _segments[i];
-                for (int j = 0; j < segment.Processes.Length; j++)
-                    segment.Processes[j].Coroutine = null;
-
-                _segments[i].Count = 0;
-                _segments[i].FreeHead = -1;
-            }
-        }
         public struct CoroutineHandle
         {
             public int Id;
@@ -64,9 +41,17 @@ namespace UnityEssentials
         private int _freeHandleIndex = 0;
         private ushort _currentVersion = 1;
 
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+
+            KillAllCoroutines();
+        }
+
         public override void Awake()
         {
             base.Awake();
+
             for (int i = 0; i < _segments.Length; i++)
             {
                 _segments[i].Processes = new ProcessData[InitialBufferSize];
@@ -180,6 +165,40 @@ namespace UnityEssentials
             LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
         }
 
+        public static void PauseCoroutine(CoroutineHandle handle)
+        {
+            for (int s = 0; s < Instance._segments.Length; s++)
+            {
+                ref SegmentData segment = ref Instance._segments[s];
+                for (int i = 0; i < segment.Count; i++)
+                    if (segment.Processes[i].Handle.Equals(handle) &&
+                        segment.Processes[i].Coroutine != null)
+                    {
+                        segment.Processes[i].Paused = true;
+                        return;
+                    }
+            }
+        }
+
+        public static void ResumeCoroutine(CoroutineHandle handle)
+        {
+            for (int s = 0; s < Instance._segments.Length; s++)
+            {
+                ref SegmentData segment = ref Instance._segments[s];
+                for (int i = 0; i < segment.Count; i++)
+                    if (segment.Processes[i].Handle.Equals(handle) &&
+                        segment.Processes[i].Coroutine != null)
+                    {
+                        segment.Processes[i].Paused = false;
+
+                        // Adjust wait time if paused during waiting period
+                        if (segment.Processes[i].WaitUntil < LocalTime)
+                            segment.Processes[i].WaitUntil = LocalTime;
+                        return;
+                    }
+            }
+        }
+
         public static void KillCoroutine(CoroutineHandle handle)
         {
             for (int s = 0; s < Instance._segments.Length; s++)
@@ -197,6 +216,28 @@ namespace UnityEssentials
                     }
                 }
             }
+        }
+
+        public void KillAllCoroutines()
+        {
+            for (int i = _segments.Length - 1; i >= 0; i--)
+            {
+                SegmentData segment = _segments[i];
+                for (int j = 0; j < segment.Processes.Length; j++)
+                    segment.Processes[j].Coroutine = null;
+
+                _segments[i].Count = 0;
+                _segments[i].FreeHead = -1;
+            }
+        }
+
+        public bool IsCoroutineActive(CoroutineHandle handle)
+        {
+            foreach (var segment in _segments)
+                foreach (var process in segment.Processes)
+                    if (process.Handle.Equals(handle))
+                        return process.Coroutine != null;
+            return false;
         }
     }
 

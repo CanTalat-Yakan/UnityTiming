@@ -15,7 +15,12 @@ namespace UnityEssentials.Tests
         [SetUp]
         public void Setup()
         {
-            _timing = Timing.Instance;
+            // Destroy existing instance if any
+            if (Timing.Instance != null)
+                Object.DestroyImmediate(Timing.Instance.gameObject);
+
+            GameObject go = new GameObject("Timing");
+            _timing = go.AddComponent<Timing>();
             _testFloat = 0f;
             _testBool = false;
         }
@@ -66,13 +71,55 @@ namespace UnityEssentials.Tests
             Timing.KillCoroutine(handle);
         }
 
-        [Test]
-        public void HandleInvalidationAfterKill()
+        [UnityTest]
+        public IEnumerator PauseResumeFunctionality()
         {
-            var handle = Timing.RunCoroutine(TestCoroutine());
-            Assert.IsTrue(Timing.Instance.IsCoroutineActive(handle)); // Implement IsCoroutineActive
+            var handle = Timing.RunCoroutine(PausableCoroutine());
+
+            yield return null; // Execute first frame
+            Assert.AreEqual(1f, _testFloat);
+
+            Timing.PauseCoroutine(handle);
+            yield return new WaitForSeconds(0.2f); // Allow time to pause
+            Assert.AreEqual(1f, _testFloat);
+
+            Timing.ResumeCoroutine(handle);
+            yield return null; // Immediate execution after resume
+            Assert.AreEqual(2f, _testFloat);
 
             Timing.KillCoroutine(handle);
+        }
+
+        [UnityTest]
+        public IEnumerator PauseDuringWaitPeriod()
+        {
+            var handle = Timing.RunCoroutine(WaitCoroutine());
+
+            yield return new WaitForSeconds(0.3f);
+            Timing.PauseCoroutine(handle);
+            float pausedTime = _testFloat;
+
+            yield return new WaitForSeconds(0.5f);
+            Assert.AreEqual(pausedTime, _testFloat);
+
+            Timing.ResumeCoroutine(handle);
+            yield return new WaitForSeconds(0.3f);
+            Assert.Greater(_testFloat, pausedTime);
+
+            Timing.KillCoroutine(handle);
+        }
+
+        [UnityTest]
+        public IEnumerator HandleInvalidationAfterKill()
+        {
+            var handle = Timing.RunCoroutine(TestCoroutine());
+            yield return null; // Wait for registration
+
+            Assert.IsTrue(Timing.Instance.IsCoroutineActive(handle));
+
+            Timing.KillCoroutine(handle);
+            yield return null; // Wait for cleanup
+
             Assert.IsFalse(Timing.Instance.IsCoroutineActive(handle));
         }
 
@@ -112,7 +159,6 @@ namespace UnityEssentials.Tests
             Assert.LessOrEqual(allocAfter - allocBefore, 4096); // More lenient threshold
         }
 
-        // Test Coroutines
         IEnumerator<float> TestCoroutine()
         {
             _testFloat = 1f;
@@ -135,6 +181,24 @@ namespace UnityEssentials.Tests
             {
                 _testFloat = Timing.LocalTime;
                 yield return 0;
+            }
+        }
+
+        IEnumerator<float> PausableCoroutine()
+        {
+            while (true)
+            {
+                _testFloat += 1f;
+                yield return 0;
+            }
+        }
+
+        IEnumerator<float> WaitCoroutine()
+        {
+            while (true)
+            {
+                _testFloat = Time.time;
+                yield return 1f;
             }
         }
 
