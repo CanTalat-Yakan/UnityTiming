@@ -15,7 +15,7 @@ namespace UnityEssentials
         public static CoroutineHandle CurrentCoroutine => Instance._currentCoroutine;
         public static event System.Action OnPreExecute;
 
-        private readonly SegmentData[] _segments = new SegmentData[4];
+        public readonly SegmentData[] _segments = new SegmentData[4];
         private readonly Dictionary<CoroutineHandle, ProcessIndex> _handleToIndex = new();
         private readonly Dictionary<ProcessIndex, CoroutineHandle> _indexToHandle = new();
         public static System.Func<IEnumerator<float>, CoroutineHandle, IEnumerator<float>> ReplacementFunction;
@@ -44,7 +44,7 @@ namespace UnityEssentials
             public int Index;
         }
 
-        private struct SegmentData
+        public class SegmentData
         {
             public IEnumerator<float>[] Processes;
             public bool[] Paused;
@@ -97,7 +97,7 @@ namespace UnityEssentials
             _segments[(int)Segment.SlowUpdate] = new(InitialBufferSizeMedium);
         }
 
-        private void ProcessSegment(Segment segment)
+        public void ProcessSegment(Segment segment)
         {
             OnPreExecute?.Invoke();
 
