@@ -174,7 +174,8 @@ public class ExecutionMonitor : MonoBehaviour
 ```csharp
 public class TimeDisplay : MonoBehaviour
 {
-    void Update() => Debug.Log($"Frame Time: {Timing.LocalTime:0.00}, Delta: {Timing.DeltaTime:0.000}");
+    void Update() =>
+		Debug.Log($"Frame Time: {Timing.LocalTime:0.00}, Delta: {Timing.DeltaTime:0.000}");
 }
 ```
 
