@@ -178,9 +178,9 @@ namespace UnityEssentials
                         segmentData.Processes[i].WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
                     }
                 }
-                catch (System.Exception e)
+                catch (System.Exception ex)
                 {
-                    Debug.LogException(e);
+                    Debug.LogException(ex);
                     KillCoroutine(segmentData.Processes[i].Handle);
                 }
             }
