@@ -17,27 +17,31 @@ using UnityEssentials;
 ```
 
 # Timing
-These cover coroutine scheduling, segmentation, timing access, lifecycle control, and extension points.
+Robust coroutine management system with segment-based execution, precise timing control, and zero allocation performance.
 
+
+## Features
+- Zero GC allocations during runtime
+- Frame-perfect timing control
+- Segment-based execution (Update, FixedUpdate, LateUpdate, SlowUpdate)
+- Pause/Resume functionality
+- Coroutine replacement system
+- Instance-based lifecycle management
 
 ## Usage Examples
 
 Each snippet below demonstrates a distinct usage scenario:
 
 
-1. Basic Coroutine Execution in Update Segment
+1. Basic Coroutine Execution
+Frame-by-frame execution with precise timing control:
 ```csharp
-using UnityEngine;
-using System.Collections;
-
-public class BasicUpdateCoroutine : MonoBehaviour
+public class BasicCoroutine : MonoBehaviour
 {
-    void Start()
-    {
-        Timing.RunCoroutine(MyCoroutine());
-    }
+    void Start() =>
+        Timing.RunCoroutine(MyRoutine());
 
-    IEnumerator<float> MyCoroutine()
+    IEnumerator<float> MyRoutine()
     {
         Debug.Log("Start");
         yield return 1f;
@@ -45,190 +49,176 @@ public class BasicUpdateCoroutine : MonoBehaviour
         yield return Timing.WaitForOneFrame;
         Debug.Log("1 frame passed");
     }
-}
 ```
 
-
-2. FixedUpdate Coroutine (e.g., physics or time-critical logic)
+2. FixedUpdate Physics Coroutine
 ```csharp
 public class PhysicsCoroutine : MonoBehaviour
 {
-    void Start()
-    {
-        Timing.RunCoroutine(FixedRoutine(), Segment.FixedUpdate);
-    }
+    void Start() =>
+        Timing.RunCoroutine(PhysicsRoutine(), Segment.FixedUpdate);
 
-    IEnumerator<float> FixedRoutine()
+    IEnumerator<float> PhysicsRoutine()
     {
         while (true)
         {
-            Debug.Log("FixedUpdate tick");
-            yield return 0.02f; // 50Hz
+            Debug.Log("FixedUpdate @ 50Hz");
+            yield return 0.02f;
         }
     }
 }
-
 ```
 
 
-3. LateUpdate Coroutine (e.g., camera logic or post-frame logic)
-
+3. LateUpdate Camera Logic
 ```csharp
-public class PostFrameRoutine : MonoBehaviour
+public class CameraController : MonoBehaviour
 {
-    void Start()
-    {
-        Timing.RunCoroutine(CameraRoutine(), Segment.LateUpdate);
-    }
+    void Start() =>
+        Timing.RunCoroutine(PostFrameLogic(), Segment.LateUpdate);
 
-    IEnumerator<float> CameraRoutine()
+    IEnumerator<float> PostFrameLogic()
     {
         while (true)
         {
-            Debug.Log("After everything else");
+            Debug.Log("Camera update after main logic");
             yield return Timing.WaitForOneFrame;
         }
     }
 }
-
 ```
 
 
-4. SlowUpdate Coroutine (e.g., infrequent operations)
+4. Complex Event Sequencing
 ```csharp
-
-public class SlowTask : MonoBehaviour
+public class SlowOperations : MonoBehaviour
 {
-    void Start()
-    {
-        Timing.RunCoroutine(SlowRoutine(), Segment.SlowUpdate);
-    }
+    void Start() =>
+        Timing.RunCoroutine(InfrequentChecks(), Segment.SlowUpdate);
 
-    IEnumerator<float> SlowRoutine()
+    IEnumerator<float> InfrequentChecks()
     {
         while (true)
         {
-            Debug.Log("Every few frames");
-            yield return 1.0f;
+            Debug.Log("Non-critical background check");
+            yield return 2.0f;
         }
     }
 }
-
 ```
 
 
-5. Coroutine Cancellation
+5. Coroutine Lifecycle Management
 ```csharp
-
-public class CancellableCoroutine : MonoBehaviour
+public class LifecycleExample : MonoBehaviour
 {
     CoroutineHandle handle;
 
     void Start()
     {
-        handle = Timing.RunCoroutine(CancellableRoutine());
-        Invoke("StopRoutine", 2f);
+        handle = Timing.RunCoroutine(TimedRoutine());
+        Invoke(nameof(StopEarly), 3f);
     }
 
-    IEnumerator<float> CancellableRoutine()
+    IEnumerator<float> TimedRoutine()
     {
         while (true)
         {
-            Debug.Log("Running");
+            Debug.Log("Persistent operation");
             yield return 0.5f;
         }
     }
 
-    void StopRoutine()
+    void StopEarly()
     {
-        Timing.KillCoroutines(handle);
-        Debug.Log("Stopped");
+        Timing.KillCoroutine(handle);
+        Debug.Log("Coroutine stopped prematurely");
     }
 }
-
 ```
 
 
-6. Replacement Function Use
+6. Coroutine Replacement System
 ```csharp
-
-public class CoroutineReplacementExample : MonoBehaviour
+public class FaultRecovery : MonoBehaviour
 {
     void Start()
     {
-        Timing.ReplacementFunction = Replace;
-        Timing.RunCoroutine(FaultyRoutine());
+        Timing.ReplacementFunction = RecoveryHandler;
+        Timing.RunCoroutine(PotentiallyFaulty());
     }
 
-    IEnumerator<float> FaultyRoutine()
+    IEnumerator<float> PotentiallyFaulty()
     {
-        yield return float.NaN; // Will trigger replacement
+        yield return float.NaN; // Trigger replacement
     }
 
-    IEnumerator<float> Replace(IEnumerator<float> original, CoroutineHandle handle)
+    IEnumerator<float> RecoveryHandler(IEnumerator<float> original, CoroutineHandle handle)
     {
-        Debug.Log("Replacing faulty coroutine");
+        Debug.Log("Recovering from fault");
         yield return 1f;
-        Debug.Log("Replaced logic executed");
+        Debug.Log("Recovery complete");
     }
 }
-
 ```
 
 
-7. OnPreExecute Hook
+7. Pre-Execution Hook
 ```csharp
-
-public class PreExecuteLogger : MonoBehaviour
+public class ExecutionMonitor : MonoBehaviour
 {
-    void OnEnable()
-    {
-        Timing.OnPreExecute += PreTick;
-    }
+    void OnEnable() => Timing.OnPreExecute += LogPreUpdate;
+    void OnDisable() => Timing.OnPreExecute -= LogPreUpdate;
 
-    void OnDisable()
+    void LogPreUpdate()
     {
-        Timing.OnPreExecute -= PreTick;
-    }
-
-    void PreTick()
-    {
-        Debug.Log("Before coroutine segment executes");
+        Debug.Log($"Segment about to execute at {Timing.LocalTime}");
     }
 }
-
 ```
 
 
-8. Accessing Timing Data
+8. Time Data Access
 ```csharp
-
-public class TimeAccess : MonoBehaviour
+public class TimeDisplay : MonoBehaviour
 {
     void Update()
     {
-        Debug.Log($"LocalTime: {Timing.LocalTime}, DeltaTime: {Timing.DeltaTime}");
+        Debug.Log($"Frame Time: {Timing.LocalTime:0.00}, Delta: {Timing.DeltaTime:0.000}");
     }
 }
-
 ```
 
 
-9. Tracking Current Coroutine Handle
+9. Current Coroutine Tracking
 ```csharp
-
-public class CurrentCoroutineTest : MonoBehaviour
+public class ContextAwareCoroutine : MonoBehaviour
 {
     void Start()
     {
-        Timing.RunCoroutine(TrackHandle());
+        Timing.RunCoroutine(HandleAwareRoutine());
     }
 
-    IEnumerator<float> TrackHandle()
+    IEnumerator<float> HandleAwareRoutine()
     {
-        Debug.Log($"Handle at runtime: {Timing.CurrentCoroutine.IsValid}");
+        Debug.Log($"Running under handle: {Timing.CurrentCoroutine}");
         yield return 1f;
+        Debug.Log($"Still same handle: {Timing.CurrentCoroutine}");
     }
 }
-
 ```
+
+##Key Features
+-yield return 0 - Execute next frame (Update segment)
+-yield return Timing.WaitUntil(() => condition) - Pause until condition met
+-while(condition) { yield return 0; } - Frame-perfect conditional looping
+-Cross-segment coordination
+-Precise timeout handling
+-Efficient resource polling strategies
+
+##Best Practices
+-Use yield return 0 for frame-by-frame logic
+-Pre-calculate wait durations outside loops
+-Use KillCoroutine instead of null checks
+-Leverage segments for proper execution order
+-Use WaitUntil for event-driven logic
