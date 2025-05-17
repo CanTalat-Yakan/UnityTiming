@@ -12,6 +12,29 @@ namespace UnityEssentials
         public static float LocalTime { get; private set; }
         public static float DeltaTime { get; private set; }
 
+        // Add this to your Timing class
+        public bool IsCoroutineActive(CoroutineHandle handle)
+        {
+            foreach (var segment in _segments)
+                foreach (var process in segment.Processes)
+                    if (process.Handle.Equals(handle))
+                        return process.Coroutine != null;
+            return false;
+        }
+
+        // Add this to your Timing class
+        public void KillAllCoroutines()
+        {
+            for (int i = _segments.Length - 1; i >= 0; i--)
+            {
+                SegmentData segment = _segments[i];
+                for (int j = 0; j < segment.Processes.Length; j++)
+                    segment.Processes[j].Coroutine = null;
+
+                _segments[i].Count = 0;
+                _segments[i].FreeHead = -1;
+            }
+        }
         public struct CoroutineHandle
         {
             public int Id;
