@@ -5,6 +5,23 @@ namespace UnityEssentials
 {
     public enum Segment { Update, FixedUpdate, LateUpdate }
 
+    public struct CoroutineHandle
+    {
+        public ushort Version;
+        public bool IsValid => Version > 0;
+    }
+
+    public struct ProcessData
+    {
+        public int ArrayIndex;
+        public int HandleIndex;
+        public ushort HandleVersion;
+
+        public IEnumerator<float> Coroutine;
+        public float WaitUntil;
+        public bool Paused;
+    }
+
     public partial class Timing : PersistentSingleton<Timing>
     {
         public const float WaitForOneFrame = float.NegativeInfinity;
@@ -118,23 +135,6 @@ namespace UnityEssentials
 
     public partial class Timing : PersistentSingleton<Timing>
     {
-        public struct CoroutineHandle
-        {
-            public ushort Version;
-            public bool IsValid => Version > 0;
-        }
-
-        public struct ProcessData
-        {
-            public int ArrayIndex;
-            public int HandleIndex;
-            public ushort HandleVersion;
-
-            public IEnumerator<float> Coroutine;
-            public float WaitUntil;
-            public bool Paused;
-        }
-
         private ManagedArray<ProcessData>[] _processPool;
         private ManagedArray<CoroutineHandle> _handlePool;
 
