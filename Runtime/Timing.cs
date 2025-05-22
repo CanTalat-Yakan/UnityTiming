@@ -77,11 +77,17 @@ namespace UnityEssentials
                     if (processArray.Elements[i].HandleVersion.Equals(handleVersion))
                     {
                         processArray.Elements[i].Coroutine = null;
-                        //Instance._handlePool.Return(processArray.Elements[i].HandleIndex);
+                        Instance._handlePool.Return(processArray.Elements[i].HandleIndex);
                         return;
                     }
                 }
             }
+        }
+
+        public static void KillCoroutine(ProcessData processData)
+        {
+            processData.Coroutine = null;
+            Instance._handlePool.Return(processData.HandleIndex);
         }
 
         public static void KillAllCoroutines()
@@ -118,7 +124,7 @@ namespace UnityEssentials
             public bool IsValid => Version > 0;
         }
 
-        private struct ProcessData
+        public struct ProcessData
         {
             public int ArrayIndex;
             public int HandleIndex;
@@ -177,12 +183,12 @@ namespace UnityEssentials
                         float current = processData.Coroutine.Current;
                         processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
                     }
-                    else KillCoroutine(processData.HandleVersion);
+                    else KillCoroutine(processData);
                 }
                 catch (System.Exception ex)
                 {
                     Debug.LogException(ex);
-                    KillCoroutine(processData.HandleVersion);
+                    KillCoroutine(processData);
                 }
             }
         }
