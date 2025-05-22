@@ -198,23 +198,5 @@ namespace UnityEssentials
             DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
             LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
         }
-
-        private CoroutineHandle RunCoroutineInternal(IEnumerator<float> coroutine, int processPoolIndex)
-        {
-            ref var processArray = ref _processPool[processPoolIndex];
-
-            ref var handle = ref Instance._handlePool.Get(out var handleIndex);
-            handle.Version = Instance._currentVersion++;
-
-            ref var processData = ref processArray.Get(out var processIndex);
-            processData.Coroutine = coroutine;
-            processData.Paused = false;
-            processData.ArrayIndex = processIndex;
-            processData.WaitUntil = LocalTime;
-            processData.HandleIndex = handleIndex;
-            processData.HandleVersion = handle.Version;
-
-            return handle;
-        }
     }
 }
