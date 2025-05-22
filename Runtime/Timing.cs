@@ -1,9 +1,9 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 namespace UnityEssentials
 {
-    public enum Segment { Update, FixedUpdate, LateUpdate, SlowUpdate }
+    public enum Segment { Update, FixedUpdate, LateUpdate }
 
     public partial class Timing : PersistentSingleton<Timing>
     {
@@ -12,59 +12,72 @@ namespace UnityEssentials
         public static float LocalTime { get; private set; }
         public static float DeltaTime { get; private set; }
 
-        public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update) =>
-            Instance.RunCoroutineInternal(coroutine, (int)segment);
-
-        public static void PauseCoroutine(CoroutineHandle handle)
+        public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
         {
-            ref var segments = ref Instance._segments;
-            for (int s = 0; s < segments.Length; s++)
+            ref var processArray = ref Instance._processPool[(int)segment];
+
+            ref var handle = ref Instance._handlePool.Get(out var handleIndex);
+            handle.Version = Instance._currentVersion++;
+
+            ref var processData = ref processArray.Get(out var processIndex);
+            processData.Coroutine = coroutine;
+            processData.Paused = false;
+            processData.ArrayIndex = processIndex;
+            processData.WaitUntil = LocalTime;
+            processData.HandleIndex = handleIndex;
+            processData.HandleVersion = handle.Version;
+
+            return handle;
+        }
+
+        public static void PauseCoroutine(ushort handleVersion)
+        {
+            ref var processPool = ref Instance._processPool;
+            for (int s = 0; s < processPool.Length; s++)
             {
-                ref var segment = ref segments[s];
-                for (int i = 0; i < segment.Count; i++)
-                    if (segment.Items[i].Handle.Equals(handle) &&
-                        segment.Items[i].Coroutine != null)
+                ref var processArray = ref processPool[s];
+                for (int i = 0; i < processArray.Count; i++)
+                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion) &&
+                        processArray.Elements[i].Coroutine != null)
                     {
-                        segment.Items[i].Paused = true;
+                        processArray.Elements[i].Paused = true;
                         return;
                     }
             }
         }
 
-        public static void ResumeCoroutine(CoroutineHandle handle)
+        public static void ResumeCoroutine(ushort handleVersion)
         {
-            ref var segments = ref Instance._segments;
-            for (int s = 0; s < segments.Length; s++)
+            ref var processPool = ref Instance._processPool;
+            for (int s = 0; s < processPool.Length; s++)
             {
-                ref var segment = ref segments[s];
-                for (int i = 0; i < segment.Count; i++)
-                    if (segment.Items[i].Handle.Equals(handle) &&
-                        segment.Items[i].Coroutine != null)
+                ref var processArray = ref processPool[s];
+                for (int i = 0; i < processArray.Count; i++)
+                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion) &&
+                        processArray.Elements[i].Coroutine != null)
                     {
-                        segment.Items[i].Paused = false;
+                        processArray.Elements[i].Paused = false;
 
                         // Adjust wait time if paused during waiting period
-                        if (segment.Items[i].WaitUntil < LocalTime)
-                            segment.Items[i].WaitUntil = LocalTime;
+                        if (processArray.Elements[i].WaitUntil < LocalTime)
+                            processArray.Elements[i].WaitUntil = LocalTime;
                         return;
                     }
             }
         }
 
-        public static void KillCoroutine(CoroutineHandle handle)
+        public static void KillCoroutine(ushort handleVersion)
         {
-            ref var segments = ref Instance._segments;
-            for (int s = 0; s < segments.Length; s++)
+            ref var processPool = ref Instance._processPool;
+            for (int s = 0; s < processPool.Length; s++)
             {
-                ref var segment = ref segments[s];
-                for (int i = 0; i < segment.Count; i++)
+                ref var processArray = ref processPool[s];
+                for (int i = 0; i < processArray.Count; i++)
                 {
-                    if (segment.Items[i].Handle.Equals(handle))
+                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion))
                     {
-                        segment.Items[i].Coroutine = null;
-                        segment.Items[i].WaitUntil = segment.FreeHead;
-                        segment.FreeHead = i;
-                        Instance.ReleaseHandle(handle);
+                        processArray.Elements[i].Coroutine = null;
+                        //Instance._handlePool.Return(processArray.Elements[i].HandleIndex);
                         return;
                     }
                 }
@@ -73,25 +86,26 @@ namespace UnityEssentials
 
         public static void KillAllCoroutines()
         {
-            ref var segments = ref Instance._segments;
-            for (int i = segments.Length - 1; i >= 0; i--)
+            ref var processPool = ref Instance._processPool;
+            for (int i = 0; i < processPool.Length; i++)
             {
-                var segment = segments[i];
-                for (int j = 0; j < segment.Items.Length; j++)
-                    segment.Items[j].Coroutine = null;
-
-                segments[i].Count = 0;
-                segments[i].FreeHead = -1;
+                ref var processArray = ref processPool[i];
+                for (int j = 0; j < processArray.Count; j++)
+                {
+                    ref var processData = ref processArray.Elements[j];
+                    processData.Coroutine = null;
+                    processArray.Return(processData.ArrayIndex);
+                }
             }
         }
 
         public static bool IsCoroutineActive(CoroutineHandle handle)
         {
-            ref var segments = ref Instance._segments;
-            foreach (var segment in segments)
-                foreach (var process in segment.Items)
-                    if (process.Handle.Equals(handle))
-                        return process.Coroutine != null;
+            ref var processPool = ref Instance._processPool;
+            foreach (var processArray in processPool)
+                foreach (var processData in processArray.Elements)
+                    if (processData.HandleVersion.Equals(handle.Version))
+                        return processData.Coroutine != null;
             return false;
         }
     }
@@ -100,30 +114,24 @@ namespace UnityEssentials
     {
         public struct CoroutineHandle
         {
-            public int Id;
             public ushort Version;
             public bool IsValid => Version > 0;
         }
 
         private struct ProcessData
         {
+            public int ArrayIndex;
+            public int HandleIndex;
+            public ushort HandleVersion;
+
             public IEnumerator<float> Coroutine;
             public float WaitUntil;
             public bool Paused;
-            public bool Held;
-            public CoroutineHandle Handle;
         }
 
-        private struct SegmentData
-        {
-            public ProcessData[] Processes;
-            public int Count;
-            public int Capacity;
-            public int FreeHead;
-        }
+        private ManagedArray<ProcessData>[] _processPool;
+        private ManagedArray<CoroutineHandle> _handlePool;
 
-        private ManagedArray<ProcessData>[] _segments;
-        private ObjectPool<CoroutineHandle> _handlePool;
         private ushort _currentVersion = 1;
 
         protected override void OnDestroy()
@@ -136,15 +144,11 @@ namespace UnityEssentials
         {
             base.Awake();
 
-            const int initialBufferSize = 256;
+            _handlePool = new ManagedArray<CoroutineHandle>(256);
 
-            _handlePool = new ObjectPool<CoroutineHandle>(
-                initialBufferSize,
-                i => new CoroutineHandle { Id = i, Version = 0 });
-
-            _segments = new ManagedArray<ProcessData>[4];
-            for (int i = 0; i < _segments.Length; i++)
-                _segments[i] = new ManagedArray<ProcessData>(initialBufferSize);
+            _processPool = new ManagedArray<ProcessData>[3];
+            for (int i = 0; i < _processPool.Length; i++)
+                _processPool[i] = new ManagedArray<ProcessData>(256);
         }
 
         public void Update() => ProcessSegment(Segment.Update);
@@ -153,28 +157,32 @@ namespace UnityEssentials
 
         private void ProcessSegment(Segment segment)
         {
-            int segmentIndex = (int)segment;
-            ref var segmentData = ref _segments[segmentIndex];
             UpdateTimeValues(segment);
-            for (int i = 0; i < segmentData.Count; i++)
+
+            ref var processPool = ref _processPool[(int)segment];
+            for (int i = 0; i < processPool.Count; i++)
             {
-                if (segmentData.Items[i].Coroutine == null) continue;
-                if (segmentData.Items[i].Paused || segmentData.Items[i].Held) continue;
-                if (LocalTime < segmentData.Items[i].WaitUntil) continue;
+                ref var processData = ref processPool.Elements[i];
+
+                if (processData.Coroutine == null || processData.Paused)
+                    continue;
+
+                if (LocalTime < processData.WaitUntil)
+                    continue;
 
                 try
                 {
-                    if (segmentData.Items[i].Coroutine.MoveNext())
+                    if (processData.Coroutine.MoveNext())
                     {
-                        float current = segmentData.Items[i].Coroutine.Current;
-                        segmentData.Items[i].WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
+                        float current = processData.Coroutine.Current;
+                        processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
                     }
-                    else KillCoroutine(segmentData.Items[i].Handle);
+                    else KillCoroutine(processData.HandleVersion);
                 }
                 catch (System.Exception ex)
                 {
                     Debug.LogException(ex);
-                    KillCoroutine(segmentData.Items[i].Handle);
+                    KillCoroutine(processData.HandleVersion);
                 }
             }
         }
@@ -185,26 +193,22 @@ namespace UnityEssentials
             LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
         }
 
-        private CoroutineHandle RunCoroutineInternal(IEnumerator<float> coroutine, int segmentIndex)
+        private CoroutineHandle RunCoroutineInternal(IEnumerator<float> coroutine, int processPoolIndex)
         {
-            ref var segment = ref _segments[segmentIndex];
-            int processIndex = segment.Add(new ProcessData
-            {
-                Coroutine = coroutine,
-                Handle = GetHandle()
-            });
+            ref var processArray = ref _processPool[processPoolIndex];
 
-            return segment.Items[processIndex].Handle;
-        }
+            ref var handle = ref Instance._handlePool.Get(out var handleIndex);
+            handle.Version = Instance._currentVersion++;
 
-        private CoroutineHandle GetHandle()
-        {
-            CoroutineHandle handle = _handlePool.Get();
-            handle.Version = _currentVersion++;
+            ref var processData = ref processArray.Get(out var processIndex);
+            processData.Coroutine = coroutine;
+            processData.Paused = false;
+            processData.ArrayIndex = processIndex;
+            processData.WaitUntil = LocalTime;
+            processData.HandleIndex = handleIndex;
+            processData.HandleVersion = handle.Version;
+
             return handle;
         }
-
-        private void ReleaseHandle(CoroutineHandle handle) =>
-            _handlePool.Release(ref handle, handle.Id);
     }
 }
