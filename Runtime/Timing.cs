@@ -140,13 +140,13 @@ namespace UnityEssentials
 
         private ushort _currentVersion = 1;
 
-        protected override void OnDestroy()
+        public override void OnDestroy()
         {
             KillAllCoroutines();
             base.OnDestroy();
         }
 
-        protected override void Awake()
+        public override void Awake()
         {
             base.Awake();
 
@@ -163,7 +163,8 @@ namespace UnityEssentials
 
         private void ProcessSegment(Segment segment)
         {
-            UpdateTimeValues(segment);
+            DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
+            LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
 
             ref var processPool = ref _processPool[(int)segment];
             for (int i = 0; i < processPool.Count; i++)
@@ -191,12 +192,6 @@ namespace UnityEssentials
                     KillCoroutine(processData);
                 }
             }
-        }
-
-        private void UpdateTimeValues(Segment segment)
-        {
-            DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
-            LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
         }
     }
 }
