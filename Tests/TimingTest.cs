@@ -3,6 +3,7 @@ using UnityEngine.TestTools;
 using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
+using System;
 
 namespace UnityEssentials.Tests
 {
@@ -17,7 +18,7 @@ namespace UnityEssentials.Tests
         {
             // Destroy existing instance if any
             if (Timing.Instance != null)
-                Object.DestroyImmediate(Timing.Instance.gameObject);
+                UnityEngine.Object.DestroyImmediate(Timing.Instance.gameObject);
 
             GameObject go = new GameObject("Timing");
             _timing = go.AddComponent<Timing>();
@@ -29,7 +30,7 @@ namespace UnityEssentials.Tests
         public void Teardown()
         {
             Timing.KillAllCoroutines();
-            Object.DestroyImmediate(_timing);
+            UnityEngine.Object.DestroyImmediate(_timing);
         }
 
         [UnityTest]
@@ -146,6 +147,7 @@ namespace UnityEssentials.Tests
         [UnityTest]
         public IEnumerator ZeroAllocationCheck()
         {
+            GC.Collect();
             var allocBefore = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
 
             for (int i = 0; i < 100; i++)
@@ -156,7 +158,7 @@ namespace UnityEssentials.Tests
             }
 
             var allocAfter = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-            Assert.LessOrEqual(allocAfter - allocBefore, 4096); // More lenient threshold
+            Assert.LessOrEqual(allocAfter - allocBefore, 4096);
         }
 
         IEnumerator<float> TestCoroutine()

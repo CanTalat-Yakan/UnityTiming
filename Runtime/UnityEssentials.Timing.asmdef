@@ -2,7 +2,9 @@
     "name": "UnityEssentials.Timing",
     "rootNamespace": "UnityEssentials",
     "references": [
-        "GUID:31005776ba0ea9c4bb2ee78cca2f6886"
+        "GUID:31005776ba0ea9c4bb2ee78cca2f6886",
+        "GUID:bbc58e8deea7ead41b6ae8e06f72ea75",
+        "GUID:7ccd01408cad58c499d8256514154171"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
