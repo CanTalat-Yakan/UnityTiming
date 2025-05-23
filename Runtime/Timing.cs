@@ -268,13 +268,15 @@ namespace UnityEssentials
         public void LateUpdate() => ProcessSegment(Segment.LateUpdate);
 
         /// <summary>
-        /// Processes all coroutines in the specified segment, advancing their execution based on the current time.
+        /// Processes all coroutines associated with the specified <see cref="Segment"/>.
         /// </summary>
-        /// <remarks>This method iterates through all coroutines in the specified segment's process pool
-        /// and advances their execution if they are not paused and the required wait time has elapsed. Coroutines that
-        /// complete or encounter exceptions are removed from the process pool.</remarks>
-        /// <param name="segment">The segment to process. This determines whether the method uses fixed update time or regular update time for
-        /// coroutine execution.</param>
+        /// <remarks>This method iterates through the coroutines in the pool corresponding to the
+        /// specified segment and advances their execution if the local time has reached or exceeded their scheduled
+        /// wait time. Coroutines that are paused or null are skipped. If a coroutine completes, it is removed from the
+        /// pool.</remarks>
+        /// <param name="segment">The <see cref="Segment"/> to process. Determines whether the method uses fixed update time  (<see
+        /// cref="Time.fixedDeltaTime"/> and <see cref="Time.fixedTime"/>) or regular update time  (<see
+        /// cref="Time.deltaTime"/> and <see cref="Time.time"/>).</param>
         private void ProcessSegment(Segment segment)
         {
             DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
@@ -288,27 +290,44 @@ namespace UnityEssentials
                 if (processData.Coroutine == null || processData.Paused)
                     continue;
 
-                try
+                while (LocalTime >= processData.WaitUntil)
+                    if (!StepCoroutine(ref processData, processArray))
+                        break;
+            }
+        }
+
+        /// <summary>
+        /// Advances the execution of a coroutine by one step and updates its state.
+        /// </summary>
+        /// <remarks>This method attempts to move the coroutine to its next state by invoking <see
+        /// cref="IEnumerator.MoveNext"/>.  If the coroutine yields a value, it updates the <c>WaitUntil</c> property of
+        /// <paramref name="processData"/>  based on the yielded value. If the coroutine completes or an exception
+        /// occurs, the coroutine is terminated  and removed from the collection.</remarks>
+        /// <param name="processData">A reference to the <see cref="ProcessData"/> instance representing the coroutine to step.</param>
+        /// <param name="processArray">A collection of <see cref="ProcessData"/> instances used to manage active coroutines.</param>
+        /// <returns><see langword="true"/> if the coroutine successfully advanced to the next step;  otherwise, <see
+        /// langword="false"/> if the coroutine has completed or encountered an error.</returns>
+        private static bool StepCoroutine(ref ProcessData processData, ManagedArray<ProcessData> processArray)
+        {
+            try
+            {
+                if (processData.Coroutine.MoveNext())
                 {
-                    while (LocalTime >= processData.WaitUntil)
-                        // If the coroutine is not paused, move to the next iteration
-                        if (processData.Coroutine.MoveNext())
-                        {
-                            // If the coroutine yields a value, set WaitUntil to the current time + yield value
-                            float current = processData.Coroutine.Current;
-                            processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
-                        }
-                        else
-                        {
-                            KillCoroutine(ref processData, processArray);
-                            break;
-                        }
+                    float current = processData.Coroutine.Current;
+                    processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
+                    return true;
                 }
-                catch (Exception ex)
+                else
                 {
-                    Debug.LogException(ex);
                     KillCoroutine(ref processData, processArray);
+                    return false;
                 }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+                KillCoroutine(ref processData, processArray);
+                return false;
             }
         }
     }
