@@ -10,7 +10,7 @@ namespace UnityEssentials
     /// <remarks>This enumeration is typically used to specify the timing of operations within the Unity game
     /// loop. The available segments correspond to the main update phases: <see cref="Update"/>, <see
     /// cref="FixedUpdate"/>, and <see cref="LateUpdate"/>.</remarks>
-    public enum Segment { Update, FixedUpdate, LateUpdate }
+    public enum Segment { Update, FixedUpdate, LateUpdate, TickUpdate }
 
     /// <summary>
     /// Represents a handle to a coroutine, used to track and manage its execution state.
@@ -181,8 +181,8 @@ namespace UnityEssentials
         /// operations.</remarks>
         public static void KillAllCoroutines()
         {
-            const int segmentCount = 3;
-            for (int i = 0; i < segmentCount; i++)
+            var processPoolLength = Instance.ProcessPool.Length;
+            for (int i = 0; i < processPoolLength; i++)
                 KillAllCoroutines(i);
         }
 
@@ -258,11 +258,12 @@ namespace UnityEssentials
             base.Awake();
 
             HandlePool = new ManagedArray<CoroutineHandle>();
-            ProcessPool = new ManagedArray<ProcessData>[3];
+            ProcessPool = new ManagedArray<ProcessData>[4];
             for (int i = 0; i < ProcessPool.Length; i++)
                 ProcessPool[i] = new ManagedArray<ProcessData>();
         }
 
+        public void Start() => TickUpdate.Register(50, () => ProcessSegment(Segment.TickUpdate));
         public void Update() => ProcessSegment(Segment.Update);
         public void FixedUpdate() => ProcessSegment(Segment.FixedUpdate);
         public void LateUpdate() => ProcessSegment(Segment.LateUpdate);
@@ -282,7 +283,7 @@ namespace UnityEssentials
             DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
             LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
 
-            ref var processArray = ref ProcessPool[(int)segment];
+            var processArray = ProcessPool[(int)segment];
             for (int i = 0; i < processArray.Count; i++)
             {
                 ref var processData = ref processArray.Elements[i];
