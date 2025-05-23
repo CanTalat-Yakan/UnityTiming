@@ -4,8 +4,9 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "UnityEssentials.Timing",
-        "UnityEssentials.Singleton"
+        "UnityEssentials.Singleton",
+        "UnityEssentials.ManagedArray",
+        "UnityEssentials.Timing"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

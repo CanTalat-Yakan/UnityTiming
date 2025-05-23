@@ -68,9 +68,9 @@ namespace UnityEssentials
         /// <returns>A <see cref="CoroutineHandle"/> that can be used to track or control the coroutine's execution.</returns>
         public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
         {
-            ref var processArray = ref Instance._processPool[(int)segment];
+            var processArray = Instance.ProcessPool[(int)segment];
 
-            ref var handle = ref Instance._handlePool.Get(out var handleIndex);
+            var handle = Instance.HandlePool.Get(out var handleIndex);
             handle.Version = Instance._handleVersionIncrement++;
 
             ref var processData = ref processArray.Get(out var processIndex);
@@ -94,7 +94,7 @@ namespace UnityEssentials
         /// langword="false"/>.</returns>
         public static bool IsCoroutineActive(ushort handleVersion)
         {
-            ref var processPool = ref Instance._processPool;
+            var processPool = Instance.ProcessPool;
             foreach (var processArray in processPool)
                 foreach (var processData in processArray.Elements)
                     if (processData.HandleVersion.Equals(handleVersion))
@@ -110,7 +110,7 @@ namespace UnityEssentials
         /// <param name="handleVersion">The version of the handle associated with the coroutine to be paused.</param>
         public static void PauseCoroutine(ushort handleVersion)
         {
-            ref var processPool = ref Instance._processPool;
+            var processPool = Instance.ProcessPool;
             for (int s = 0; s < processPool.Length; s++)
             {
                 ref var processArray = ref processPool[s];
@@ -133,7 +133,7 @@ namespace UnityEssentials
         /// <param name="handleVersion">The version of the handle associated with the coroutine to be resumed.</param>
         public static void ResumeCoroutine(ushort handleVersion)
         {
-            ref var processPool = ref Instance._processPool;
+            var processPool = Instance.ProcessPool;
             for (int s = 0; s < processPool.Length; s++)
             {
                 ref var processArray = ref processPool[s];
@@ -160,14 +160,14 @@ namespace UnityEssentials
         /// <param name="handleVersion">The version of the handle associated with the coroutine to terminate.</param>
         public static void KillCoroutine(ushort handleVersion)
         {
-            ref var processPool = ref Instance._processPool;
+            var processPool = Instance.ProcessPool;
             for (int s = 0; s < processPool.Length; s++)
             {
                 ref var processArray = ref processPool[s];
                 for (int i = 0; i < processArray.Count; i++)
                     if (processArray.Elements[i].HandleVersion.Equals(handleVersion))
                     {
-                        KillCoroutine(ref processArray.Elements[i]);
+                        KillCoroutine(ref processArray.Elements[i], processArray);
                         return;
                     }
             }
@@ -196,9 +196,9 @@ namespace UnityEssentials
         /// pool.</param>
         public static void KillAllCoroutines(int segmentIndex)
         {
-            ref var processArray = ref Instance._processPool[segmentIndex];
+            var processArray = Instance.ProcessPool[segmentIndex];
             for (int i = 0; i < processArray.Count; i++)
-                KillCoroutine(ref processArray.Elements[i]);
+                KillCoroutine(ref processArray.Elements[i], processArray);
         }
 
         /// <summary>
@@ -208,13 +208,15 @@ namespace UnityEssentials
         /// name="processData"/> to <see langword="null"/>  and resets its handle version. It also releases the
         /// associated handle back to the internal handle pool.</remarks>
         /// <param name="processData">The process data containing the coroutine to terminate. Cannot be null.</param>
-        public static void KillCoroutine(ref ProcessData processData)
+        public static void KillCoroutine(ref ProcessData processData, ManagedArray<ProcessData> processArray)
         {
             processData.Coroutine = null;
             processData.HandleVersion = 0;
 
-            Instance._handlePool.Elements[processData.HandleIndex].Version = 0;
-            Instance._handlePool.Return(processData.HandleIndex);
+            Instance.HandlePool.Elements[processData.HandleIndex].Version = 0;
+            Instance.HandlePool.Return(processData.HandleIndex);
+
+            processArray.Return(processData.ArrayIndex);
         }
     }
 
@@ -228,8 +230,8 @@ namespace UnityEssentials
     /// schedule and manage coroutines in a structured and efficient manner.</remarks>
     public partial class Timing : PersistentSingleton<Timing>
     {
-        private ManagedArray<ProcessData>[] _processPool;
-        private ManagedArray<CoroutineHandle> _handlePool;
+        public ManagedArray<ProcessData>[] ProcessPool { get; private set; }
+        public ManagedArray<CoroutineHandle> HandlePool { get; private set; }
 
         private ushort _handleVersionIncrement = 1;
 
@@ -255,10 +257,10 @@ namespace UnityEssentials
         {
             base.Awake();
 
-            _handlePool = new ManagedArray<CoroutineHandle>();
-            _processPool = new ManagedArray<ProcessData>[3];
-            for (int i = 0; i < _processPool.Length; i++)
-                _processPool[i] = new ManagedArray<ProcessData>();
+            HandlePool = new ManagedArray<CoroutineHandle>();
+            ProcessPool = new ManagedArray<ProcessData>[3];
+            for (int i = 0; i < ProcessPool.Length; i++)
+                ProcessPool[i] = new ManagedArray<ProcessData>();
         }
 
         public void Update() => ProcessSegment(Segment.Update);
@@ -278,32 +280,34 @@ namespace UnityEssentials
             DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
             LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
 
-            ref var processPool = ref _processPool[(int)segment];
-            for (int i = 0; i < processPool.Count; i++)
+            ref var processArray = ref ProcessPool[(int)segment];
+            for (int i = 0; i < processArray.Count; i++)
             {
-                ref var processData = ref processPool.Elements[i];
+                ref var processData = ref processArray.Elements[i];
 
                 if (processData.Coroutine == null || processData.Paused)
                     continue;
 
-                if (LocalTime < processData.WaitUntil)
-                    continue;
-
                 try
                 {
-                    // If the coroutine is not paused, move to the next iteration
-                    if (processData.Coroutine.MoveNext())
-                    {
-                        // If the coroutine yields a value, set WaitUntil to the current time + yield value
-                        float current = processData.Coroutine.Current;
-                        processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
-                    }
-                    else KillCoroutine(ref processData);
+                    while (LocalTime >= processData.WaitUntil)
+                        // If the coroutine is not paused, move to the next iteration
+                        if (processData.Coroutine.MoveNext())
+                        {
+                            // If the coroutine yields a value, set WaitUntil to the current time + yield value
+                            float current = processData.Coroutine.Current;
+                            processData.WaitUntil = float.IsNaN(current) ? 0f : LocalTime + current;
+                        }
+                        else
+                        {
+                            KillCoroutine(ref processData, processArray);
+                            break;
+                        }
                 }
                 catch (Exception ex)
                 {
                     Debug.LogException(ex);
-                    KillCoroutine(ref processData);
+                    KillCoroutine(ref processData, processArray);
                 }
             }
         }

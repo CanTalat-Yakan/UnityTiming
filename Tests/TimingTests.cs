@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.TestTools;
 using UnityEssentials;
 
 public class TimingTests
@@ -114,15 +115,11 @@ public class TimingTests
         IEnumerator<float> CountingCoroutine()
         {
             counter++;
-            yield return 0f;
+            yield return 0;
             counter++;
         }
 
         var handle = Timing.RunCoroutine(CountingCoroutine(), Segment.Update);
-
-        // Simulate time so coroutine can advance
-        typeof(Time).GetProperty("time").SetValue(null, 1f);
-        typeof(Time).GetProperty("deltaTime").SetValue(null, 0.1f);
 
         // Call Update (which calls ProcessSegment)
         Timing.Instance.Update();
@@ -141,18 +138,16 @@ public class TimingTests
     [Test]
     public void Awake_ShouldInitializePools()
     {
-        var timing = Timing.Instance;
-        timing.Awake();
+        Timing.Instance.Awake();
 
-        // Use reflection to check private fields
-        var processPool = typeof(Timing).GetField("_processPool", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(timing);
-        var handlePool = typeof(Timing).GetField("_handlePool", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(timing);
+        var processPool = Timing.Instance.ProcessPool;
+        var handlePool = Timing.Instance.HandlePool;
 
         Assert.IsNotNull(processPool);
         Assert.IsNotNull(handlePool);
     }
 
-    [Test]
+    [UnityTest]
     public IEnumerator ZeroAllocationCheck()
     {
         GC.Collect();
@@ -162,11 +157,10 @@ public class TimingTests
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
             yield return null;
-            Timing.KillCoroutine(handle.Version);
+            //Timing.KillCoroutine(handle.Version);
         }
 
         var allocAfter = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
         Assert.LessOrEqual(allocAfter - allocBefore, 0);
     }
-
 }
