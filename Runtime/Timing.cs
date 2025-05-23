@@ -261,9 +261,10 @@ namespace UnityEssentials
             ProcessPool = new ManagedArray<ProcessData>[4];
             for (int i = 0; i < ProcessPool.Length; i++)
                 ProcessPool[i] = new ManagedArray<ProcessData>();
+
+            TickUpdate.Register(50, () => ProcessSegment(Segment.TickUpdate));
         }
 
-        public void Start() => TickUpdate.Register(50, () => ProcessSegment(Segment.TickUpdate));
         public void Update() => ProcessSegment(Segment.Update);
         public void FixedUpdate() => ProcessSegment(Segment.FixedUpdate);
         public void LateUpdate() => ProcessSegment(Segment.LateUpdate);
