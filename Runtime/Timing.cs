@@ -10,7 +10,7 @@ namespace UnityEssentials
     /// <remarks>This enumeration is typically used to specify the timing of operations within the Unity game
     /// loop. The available segments correspond to the main update phases: <see cref="Update"/>, <see
     /// cref="FixedUpdate"/>, and <see cref="LateUpdate"/>.</remarks>
-    public enum Segment { Update, FixedUpdate, LateUpdate, TickUpdate }
+    public enum Segment { Update, FixedUpdate, LateUpdate, LazyUpdate }
 
     /// <summary>
     /// Represents a handle to a coroutine, used to track and manage its execution state.
@@ -71,7 +71,7 @@ namespace UnityEssentials
             var processArray = Instance.ProcessPool[(int)segment];
 
             var handle = Instance.HandlePool.Get(out var handleIndex);
-            handle.Version = Instance._handleVersionIncrement++;
+            handle.Version = Instance._handleIncrement++;
 
             ref var processData = ref processArray.Get(out var processIndex);
             processData.Coroutine = coroutine;
@@ -233,7 +233,8 @@ namespace UnityEssentials
         public ManagedArray<ProcessData>[] ProcessPool { get; private set; }
         public ManagedArray<CoroutineHandle> HandlePool { get; private set; }
 
-        private ushort _handleVersionIncrement = 1;
+        private ushort _handleIncrement = 1;
+        private ushort _processIncrement = 0;
 
         /// <summary>
         /// Called when the object is being destroyed.
@@ -261,8 +262,6 @@ namespace UnityEssentials
             ProcessPool = new ManagedArray<ProcessData>[4];
             for (int i = 0; i < ProcessPool.Length; i++)
                 ProcessPool[i] = new ManagedArray<ProcessData>();
-
-            TickUpdate.Register(50, () => ProcessSegment(Segment.TickUpdate));
         }
 
         public void Update() => ProcessSegment(Segment.Update);
@@ -270,32 +269,57 @@ namespace UnityEssentials
         public void LateUpdate() => ProcessSegment(Segment.LateUpdate);
 
         /// <summary>
-        /// Processes all coroutines associated with the specified <see cref="Segment"/>.
+        /// Processes the specified segment by performing the necessary updates and iterations.
         /// </summary>
-        /// <remarks>This method iterates through the coroutines in the pool corresponding to the
-        /// specified segment and advances their execution if the local time has reached or exceeded their scheduled
-        /// wait time. Coroutines that are paused or null are skipped. If a coroutine completes, it is removed from the
-        /// pool.</remarks>
-        /// <param name="segment">The <see cref="Segment"/> to process. Determines whether the method uses fixed update time  (<see
-        /// cref="Time.fixedDeltaTime"/> and <see cref="Time.fixedTime"/>) or regular update time  (<see
-        /// cref="Time.deltaTime"/> and <see cref="Time.time"/>).</param>
+        /// <remarks>If the specified segment is <see cref="Segment.Update"/>, a lazy segment processing
+        /// operation is performed before proceeding with the update and iteration steps. The method updates the time
+        /// associated with the segment and iterates over the corresponding process data in the process pool.</remarks>
         private void ProcessSegment(Segment segment)
         {
-            DeltaTime = segment == Segment.FixedUpdate ? Time.fixedDeltaTime : Time.deltaTime;
-            LocalTime = segment == Segment.FixedUpdate ? Time.fixedTime : Time.time;
+            if (segment == Segment.Update)
+                ProcessLazySegment();
 
+            UpdateTime(segment);
             var processArray = ProcessPool[(int)segment];
             for (int i = 0; i < processArray.Count; i++)
-            {
-                ref var processData = ref processArray.Elements[i];
+                IterateProcessData(ref processArray.Elements[i], processArray);
+        }
 
-                if (processData.Coroutine == null || processData.Paused)
-                    continue;
+        /// <summary>
+        /// Processes a batch of tasks in the lazy update segment.
+        /// </summary>
+        /// <remarks>This method processes a fixed number of tasks (100) from the lazy update segment per
+        /// frame.  If all tasks in the segment are processed before reaching the batch limit, the processing  index is
+        /// reset to the beginning of the segment for the next frame.</remarks>
+        private void ProcessLazySegment()
+        {
+            const int LazyUpdateBatchSize = 100;
 
-                while (LocalTime >= processData.WaitUntil)
-                    if (!StepCoroutine(ref processData, processArray))
-                        break;
-            }
+            UpdateTime(Segment.LazyUpdate);
+            var processArray = ProcessPool[(int)Segment.LazyUpdate];
+            for (int i = 0; i < LazyUpdateBatchSize; i++)
+                if (_processIncrement >= processArray.Count)
+                {
+                    _processIncrement = 0;
+                    return;
+                }
+                else IterateProcessData(ref processArray.Elements[_processIncrement++], processArray);
+        }
+
+        /// <summary>
+        /// Iterates and processes the specified <see cref="ProcessData"/> instance, advancing its coroutine execution.
+        /// </summary>
+        /// <remarks>This method advances the coroutine execution of the provided <paramref
+        /// name="processData"/> instance  while the local time is greater than or equal to the instance's wait
+        /// condition. If the coroutine cannot  proceed or the instance is paused, the method exits early.</remarks>
+        private static void IterateProcessData(ref ProcessData processData, ManagedArray<ProcessData> processArray)
+        {
+            if (processData.Coroutine == null || processData.Paused)
+                return;
+
+            while (LocalTime >= processData.WaitUntil)
+                if (!StepCoroutine(ref processData, processArray))
+                    break;
         }
 
         /// <summary>
@@ -305,10 +329,6 @@ namespace UnityEssentials
         /// cref="IEnumerator.MoveNext"/>.  If the coroutine yields a value, it updates the <c>WaitUntil</c> property of
         /// <paramref name="processData"/>  based on the yielded value. If the coroutine completes or an exception
         /// occurs, the coroutine is terminated  and removed from the collection.</remarks>
-        /// <param name="processData">A reference to the <see cref="ProcessData"/> instance representing the coroutine to step.</param>
-        /// <param name="processArray">A collection of <see cref="ProcessData"/> instances used to manage active coroutines.</param>
-        /// <returns><see langword="true"/> if the coroutine successfully advanced to the next step;  otherwise, <see
-        /// langword="false"/> if the coroutine has completed or encountered an error.</returns>
         private static bool StepCoroutine(ref ProcessData processData, ManagedArray<ProcessData> processArray)
         {
             try
@@ -330,6 +350,20 @@ namespace UnityEssentials
                 Debug.LogException(ex);
                 KillCoroutine(ref processData, processArray);
                 return false;
+            }
+        }
+
+        private void UpdateTime(Segment segment)
+        {
+            if (segment == Segment.FixedUpdate)
+            {
+                DeltaTime = Time.fixedDeltaTime;
+                LocalTime = Time.fixedTime;
+            }
+            else
+            {
+                DeltaTime = Time.deltaTime;
+                LocalTime = Time.time;
             }
         }
     }
