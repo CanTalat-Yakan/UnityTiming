@@ -145,12 +145,12 @@ namespace UnityEssentials.Tests
 
             for (int i = 0; i < 100; i++)
             {
-                var handle = Timing.RunCoroutine(SimpleCoroutine());
+                Timing.RunCoroutine(SimpleCoroutine());
                 yield return null;
             }
 
             var allocAfter = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-            Assert.LessOrEqual(allocAfter - allocBefore, 0);
+            Assert.Equals(allocAfter - allocBefore, 0);
         }
     }
 }

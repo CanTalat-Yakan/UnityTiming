@@ -56,7 +56,7 @@ namespace UnityEssentials
         /// <returns>A <see cref="CoroutineHandle"/> that can be used to track or control the coroutine's execution.</returns>
         public static ushort RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
         {
-            var processArray = Instance.ProcessPool[(int)segment];
+            ref var processArray = ref Instance.ProcessPool[(int)segment];
 
             var handleVersion = Instance._handleIncrement++;
             if (handleVersion == 0) handleVersion = Instance._handleIncrement++;
@@ -84,10 +84,10 @@ namespace UnityEssentials
             var processPool = Instance.ProcessPool;
             for (int s = 0; s < processPool.Length; s++)
             {
-                ManagedArray<ProcessData> processArray = processPool[s];
-                for (int i = 0; i < processArray.Elements.Length; i++)
+                ref var processArray = ref processPool[s];
+                for (int i = 0; i < processArray.Count; i++)
                 {
-                    ProcessData processData = processArray.Elements[i];
+                    ref var processData = ref processArray.Elements[i];
                     if (processData.HandleVersion.Equals(handleVersion))
                         return processData.Coroutine != null;
                 }
@@ -109,12 +109,14 @@ namespace UnityEssentials
             {
                 ref var processArray = ref processPool[s];
                 for (int i = 0; i < processArray.Count; i++)
-                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion) &&
-                        processArray.Elements[i].Coroutine != null)
+                {
+                    ref var processData = ref processArray.Elements[i];
+                    if (processData.HandleVersion.Equals(handleVersion) && processData.Coroutine != null)
                     {
                         processArray.Elements[i].Paused = true;
                         return;
                     }
+                }
             }
         }
 
@@ -132,16 +134,19 @@ namespace UnityEssentials
             {
                 ref var processArray = ref processPool[s];
                 for (int i = 0; i < processArray.Count; i++)
-                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion) &&
-                        processArray.Elements[i].Coroutine != null)
+                {
+                    ref var processData = ref processArray.Elements[i];
+                    if (processData.HandleVersion.Equals(handleVersion) &&
+                        processData.Coroutine != null)
                     {
-                        processArray.Elements[i].Paused = false;
+                        processData.Paused = false;
 
                         // Adjust wait time if paused during waiting period
-                        if (processArray.Elements[i].WaitUntil < LocalTime)
-                            processArray.Elements[i].WaitUntil = LocalTime;
+                        if (processData.WaitUntil < LocalTime)
+                            processData.WaitUntil = LocalTime;
                         return;
                     }
+                }
             }
         }
 
@@ -159,11 +164,14 @@ namespace UnityEssentials
             {
                 ref var processArray = ref processPool[s];
                 for (int i = 0; i < processArray.Count; i++)
-                    if (processArray.Elements[i].HandleVersion.Equals(handleVersion))
+                {
+                    ref var processData = ref processArray.Elements[i];
+                    if (processData.HandleVersion.Equals(handleVersion))
                     {
                         KillCoroutine(ref processArray.Elements[i], processArray);
                         return;
                     }
+                }
             }
         }
 
@@ -175,8 +183,8 @@ namespace UnityEssentials
         /// operations.</remarks>
         public static void KillAllCoroutines()
         {
-            var processPoolLength = Instance.ProcessPool.Length;
-            for (int i = 0; i < processPoolLength; i++)
+            var processPool = Instance.ProcessPool;
+            for (int i = 0; i < processPool.Length; i++)
                 KillAllCoroutines(i);
         }
 
@@ -190,7 +198,7 @@ namespace UnityEssentials
         /// pool.</param>
         public static void KillAllCoroutines(int segmentIndex)
         {
-            var processArray = Instance.ProcessPool[segmentIndex];
+            ref var processArray = ref Instance.ProcessPool[segmentIndex];
             for (int i = 0; i < processArray.Count; i++)
                 KillCoroutine(ref processArray.Elements[i], processArray);
         }
