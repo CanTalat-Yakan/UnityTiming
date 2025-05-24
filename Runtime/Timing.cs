@@ -298,8 +298,16 @@ namespace UnityEssentials
                 return;
 
             while (LocalTime >= processData.WaitUntil)
+            {
+                if(processData.WaitUntil == WaitForOneFrame)
+                {
+                    processData.WaitUntil = LocalTime;
+                    break;
+                }
+
                 if (!StepCoroutine(ref processData, processArray))
                     break;
+            }
         }
 
         /// <summary>
