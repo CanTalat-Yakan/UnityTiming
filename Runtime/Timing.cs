@@ -42,6 +42,9 @@ namespace UnityEssentials
     public partial class Timing : PersistentSingleton<Timing>
     {
         public const float WaitForOneFrame = float.NegativeInfinity;
+        public static float WaitUntil(bool condition) => condition ? 0f : WaitForOneFrame;
+        public static float WaitWhile(bool condition) => !condition ? 0f : WaitForOneFrame;
+        public static float WaitForFixedUpdate() => s_fixedUpadteCallback ? 0f : WaitForOneFrame;
 
         public static float LocalTime { get; private set; }
         public static float DeltaTime { get; private set; }
@@ -226,6 +229,8 @@ namespace UnityEssentials
         private ushort _handleIncrement = 1;
         private ushort _processIncrement = 0;
 
+        private static bool s_fixedUpadteCallback = false;
+
         public override void OnDestroy()
         {
             KillAllCoroutines();
@@ -256,6 +261,11 @@ namespace UnityEssentials
         {
             if (segment == Segment.Update)
                 ProcessLazySegment();
+
+            if (segment == Segment.LateUpdate)
+                s_fixedUpadteCallback = false;
+            if (segment == Segment.FixedUpdate)
+                s_fixedUpadteCallback = true;
 
             UpdateTime(segment);
 
@@ -299,7 +309,7 @@ namespace UnityEssentials
 
             while (LocalTime >= processData.WaitUntil)
             {
-                if(processData.WaitUntil == WaitForOneFrame)
+                if (processData.WaitUntil == WaitForOneFrame)
                 {
                     processData.WaitUntil = LocalTime;
                     break;
