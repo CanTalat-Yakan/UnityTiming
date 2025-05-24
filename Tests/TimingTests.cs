@@ -150,7 +150,7 @@ namespace UnityEssentials.Tests
             }
 
             var allocAfter = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-            Assert.Equals(allocAfter - allocBefore, 0);
+            Assert.LessOrEqual(allocAfter - allocBefore, 0);
         }
     }
 }
