@@ -34,54 +34,47 @@ namespace UnityEssentials.Tests
         }
 
         [Test]
-        public void RunCoroutine_ShouldReturnValidHandle()
-        {
-            var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Assert.IsTrue(handle.IsValid);
-        }
-
-        [Test]
         public void IsCoroutineActive_ShouldReturnTrueForActiveCoroutine()
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Assert.IsTrue(Timing.IsCoroutineActive(handle.Version));
+            Assert.IsTrue(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
         public void IsCoroutineActive_ShouldReturnFalseForKilledCoroutine()
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Timing.KillCoroutine(handle.Version);
-            Assert.IsFalse(Timing.IsCoroutineActive(handle.Version));
+            Timing.KillCoroutine(handle);
+            Assert.IsFalse(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
         public void PauseCoroutine_ShouldPauseCoroutine()
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Timing.PauseCoroutine(handle.Version);
+            Timing.PauseCoroutine(handle);
 
             // Access internal state to verify paused (reflection or friend class if needed)
             // Here, we check that the coroutine is still active but will not advance
-            Assert.IsTrue(Timing.IsCoroutineActive(handle.Version));
+            Assert.IsTrue(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
         public void ResumeCoroutine_ShouldResumePausedCoroutine()
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Timing.PauseCoroutine(handle.Version);
-            Timing.ResumeCoroutine(handle.Version);
+            Timing.PauseCoroutine(handle);
+            Timing.ResumeCoroutine(handle);
 
-            Assert.IsTrue(Timing.IsCoroutineActive(handle.Version));
+            Assert.IsTrue(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
         public void KillCoroutine_ShouldRemoveCoroutine()
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
-            Timing.KillCoroutine(handle.Version);
-            Assert.IsFalse(Timing.IsCoroutineActive(handle.Version));
+            Timing.KillCoroutine(handle);
+            Assert.IsFalse(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
@@ -92,8 +85,8 @@ namespace UnityEssentials.Tests
 
             Timing.KillAllCoroutines();
 
-            Assert.IsFalse(Timing.IsCoroutineActive(handle1.Version));
-            Assert.IsFalse(Timing.IsCoroutineActive(handle2.Version));
+            Assert.IsFalse(Timing.IsCoroutineActive(handle1));
+            Assert.IsFalse(Timing.IsCoroutineActive(handle2));
         }
 
         [Test]
@@ -104,8 +97,8 @@ namespace UnityEssentials.Tests
 
             Timing.KillAllCoroutines((int)Segment.Update);
 
-            Assert.IsFalse(Timing.IsCoroutineActive(handle1.Version));
-            Assert.IsTrue(Timing.IsCoroutineActive(handle2.Version));
+            Assert.IsFalse(Timing.IsCoroutineActive(handle1));
+            Assert.IsTrue(Timing.IsCoroutineActive(handle2));
         }
 
         [Test]
@@ -133,19 +126,15 @@ namespace UnityEssentials.Tests
         {
             var handle = Timing.RunCoroutine(SimpleCoroutine());
             Timing.Instance.OnDestroy();
-            Assert.IsFalse(Timing.IsCoroutineActive(handle.Version));
+            Assert.IsFalse(Timing.IsCoroutineActive(handle));
         }
 
         [Test]
-        public void Awake_ShouldInitializePools()
+        public void Awake_ShouldInitializePool()
         {
             Timing.Instance.Awake();
-
             var processPool = Timing.Instance.ProcessPool;
-            var handlePool = Timing.Instance.HandlePool;
-
             Assert.IsNotNull(processPool);
-            Assert.IsNotNull(handlePool);
         }
 
         [UnityTest]

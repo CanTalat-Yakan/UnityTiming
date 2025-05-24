@@ -5,35 +5,23 @@ using System;
 namespace UnityEssentials
 {
     /// <summary>
-    /// Represents the different segments of the Unity game loop where an operation can be executed.
+    /// Represents the different update segments in a game loop or application lifecycle.
     /// </summary>
-    /// <remarks>This enumeration is typically used to specify the timing of operations within the Unity game
-    /// loop. The available segments correspond to the main update phases: <see cref="Update"/>, <see
-    /// cref="FixedUpdate"/>, and <see cref="LateUpdate"/>.</remarks>
+    /// <remarks>This enumeration is used to specify the timing or phase in which certain operations
+    /// should be executed. For example, it can be used to determine whether an action occurs during the update, fixed
+    /// update, late update, or a custom lazy update phase.</remarks>
     public enum Segment { Update, FixedUpdate, LateUpdate, LazyUpdate }
 
     /// <summary>
-    /// Represents a handle to a coroutine, used to track and manage its execution state.
-    /// </summary>
-    /// <remarks>A <see cref="CoroutineHandle"/> is considered valid if its <see cref="Version"/> is greater
-    /// than 0.  This handle can be used to identify and interact with a specific coroutine instance.</remarks>
-    public struct CoroutineHandle
-    {
-        public ushort Version;
-        public bool IsValid => Version > 0;
-    }
-
-    /// <summary>
-    /// Represents the state and metadata associated with a process, including its indices, version, and execution
+    /// Represents the state and metadata associated with a process, including its index, version, and execution
     /// state.
     /// </summary>
-    /// <remarks>This structure is used to encapsulate information about a process, such as its array and
-    /// handle indices,  versioning for handle validation, and execution state including coroutine management and pause
+    /// <remarks>This structure is used to encapsulate information about a process, such as its array index,
+    /// handle version, and execution state including coroutine management and pause
     /// status.</remarks>
     public struct ProcessData
     {
         public int ArrayIndex;
-        public int HandleIndex;
         public ushort HandleVersion;
 
         public IEnumerator<float> Coroutine;
@@ -66,22 +54,21 @@ namespace UnityEssentials
         /// <param name="coroutine">An enumerator that yields progress values to control the coroutine's execution.</param>
         /// <param name="segment">The timing segment in which the coroutine will run. Defaults to <see cref="Segment.Update"/>.</param>
         /// <returns>A <see cref="CoroutineHandle"/> that can be used to track or control the coroutine's execution.</returns>
-        public static CoroutineHandle RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
+        public static ushort RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
         {
             var processArray = Instance.ProcessPool[(int)segment];
 
-            var handle = Instance.HandlePool.Get(out var handleIndex);
-            handle.Version = Instance._handleIncrement++;
+            var handleVersion = Instance._handleIncrement++;
+            if (handleVersion == 0) handleVersion = Instance._handleIncrement++;
 
             ref var processData = ref processArray.Get(out var processIndex);
-            processData.Coroutine = coroutine;
-            processData.Paused = false;
             processData.ArrayIndex = processIndex;
+            processData.HandleVersion = handleVersion;
+            processData.Coroutine = coroutine;
             processData.WaitUntil = LocalTime;
-            processData.HandleIndex = handleIndex;
-            processData.HandleVersion = handle.Version;
+            processData.Paused = false;
 
-            return handle;
+            return handleVersion;
         }
 
         /// <summary>
@@ -95,10 +82,17 @@ namespace UnityEssentials
         public static bool IsCoroutineActive(ushort handleVersion)
         {
             var processPool = Instance.ProcessPool;
-            foreach (var processArray in processPool)
-                foreach (var processData in processArray.Elements)
+            for (int s = 0; s < processPool.Length; s++)
+            {
+                ManagedArray<ProcessData> processArray = processPool[s];
+                for (int i = 0; i < processArray.Elements.Length; i++)
+                {
+                    ProcessData processData = processArray.Elements[i];
                     if (processData.HandleVersion.Equals(handleVersion))
                         return processData.Coroutine != null;
+                }
+            }
+
             return false;
         }
 
@@ -177,7 +171,7 @@ namespace UnityEssentials
         /// Stops all coroutines across all segments.
         /// </summary>
         /// <remarks>This method iterates through all segments and terminates any active coroutines within
-        /// them. It is typically used to ensure that no coroutines are running, such as during cleanup or reset
+        /// them. It is used to ensure that no coroutines are running, such as during cleanup or reset
         /// operations.</remarks>
         public static void KillAllCoroutines()
         {
@@ -213,52 +207,28 @@ namespace UnityEssentials
             processData.Coroutine = null;
             processData.HandleVersion = 0;
 
-            Instance.HandlePool.Elements[processData.HandleIndex].Version = 0;
-            Instance.HandlePool.Return(processData.HandleIndex);
-
             processArray.Return(processData.ArrayIndex);
         }
     }
 
-    /// <summary>
-    /// Provides timing and coroutine management functionality, including processing update segments and managing
-    /// coroutine lifecycles. This class is a singleton and extends <see cref="PersistentSingleton{T}"/>.
-    /// </summary>
-    /// <remarks>The <see cref="Timing"/> class is responsible for managing coroutines and processing
-    /// different update segments (Update, FixedUpdate, and LateUpdate). It maintains internal pools for coroutine
-    /// handles and process data, and ensures proper cleanup of resources when destroyed.  This class should be used to
-    /// schedule and manage coroutines in a structured and efficient manner.</remarks>
     public partial class Timing : PersistentSingleton<Timing>
     {
         public ManagedArray<ProcessData>[] ProcessPool { get; private set; }
-        public ManagedArray<CoroutineHandle> HandlePool { get; private set; }
 
         private ushort _handleIncrement = 1;
         private ushort _processIncrement = 0;
 
-        /// <summary>
-        /// Called when the object is being destroyed.
-        /// </summary>
-        /// <remarks>This method ensures that all coroutines started by the object are stopped before
-        /// destruction. It also invokes the base class's <see cref="OnDestroy"/> method to perform any additional
-        /// cleanup.</remarks>
         public override void OnDestroy()
         {
             KillAllCoroutines();
+
             base.OnDestroy();
         }
 
-        /// <summary>
-        /// Initializes the necessary resources and pools for managing coroutine handles and process data.
-        /// </summary>
-        /// <remarks>This method is called during the object's initialization phase and sets up internal
-        /// data structures  required for handling coroutine processes. It overrides the base implementation to perform
-        /// additional  setup specific to this class.</remarks>
         public override void Awake()
         {
             base.Awake();
 
-            HandlePool = new ManagedArray<CoroutineHandle>();
             ProcessPool = new ManagedArray<ProcessData>[4];
             for (int i = 0; i < ProcessPool.Length; i++)
                 ProcessPool[i] = new ManagedArray<ProcessData>();
@@ -280,6 +250,7 @@ namespace UnityEssentials
                 ProcessLazySegment();
 
             UpdateTime(segment);
+
             var processArray = ProcessPool[(int)segment];
             for (int i = 0; i < processArray.Count; i++)
                 IterateProcessData(ref processArray.Elements[i], processArray);
@@ -296,6 +267,7 @@ namespace UnityEssentials
             const int LazyUpdateBatchSize = 100;
 
             UpdateTime(Segment.LazyUpdate);
+
             var processArray = ProcessPool[(int)Segment.LazyUpdate];
             for (int i = 0; i < LazyUpdateBatchSize; i++)
                 if (_processIncrement >= processArray.Count)
