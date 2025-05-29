@@ -41,10 +41,12 @@ namespace UnityEssentials
     /// cref="IsCoroutineActive"/> method can be used to check the status of a coroutine.</remarks>
     public partial class Timing : PersistentSingleton<Timing>
     {
+        public const float Continue = 0f;
         public const float WaitForOneFrame = float.NegativeInfinity;
-        public static float WaitUntil(bool condition) => condition ? 0f : WaitForOneFrame;
-        public static float WaitWhile(bool condition) => !condition ? 0f : WaitForOneFrame;
-        public static float WaitForFixedUpdate() => s_fixedUpadteCallback ? 0f : WaitForOneFrame;
+
+        public static float WaitUntil(bool condition) => condition ? Continue : WaitForOneFrame;
+        public static float WaitWhile(bool condition) => !condition ? Continue : WaitForOneFrame;
+        public static float WaitForFixedUpdate() => s_fixedUpadteCallback ? Continue : WaitForOneFrame;
 
         public static float LocalTime { get; private set; }
         public static float DeltaTime { get; private set; }
