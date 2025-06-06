@@ -23,6 +23,7 @@ namespace UnityEssentials
     {
         public int ArrayIndex;
         public ushort HandleVersion;
+        public string HandleGroup;
 
         public IEnumerator<float> Coroutine;
         public float WaitUntil;
@@ -44,6 +45,8 @@ namespace UnityEssentials
         public const float Continue = 0f;
         public const float WaitForOneFrame = float.NegativeInfinity;
 
+        private const string GroupDefault = "Default";
+
         public static float WaitUntil(bool condition) => condition ? Continue : WaitForOneFrame;
         public static float WaitWhile(bool condition) => !condition ? Continue : WaitForOneFrame;
         public static float WaitForFixedUpdate() => s_fixedUpadteCallback ? Continue : WaitForOneFrame;
@@ -59,7 +62,7 @@ namespace UnityEssentials
         /// <param name="coroutine">An enumerator that yields progress values to control the coroutine's execution.</param>
         /// <param name="segment">The timing segment in which the coroutine will run. Defaults to <see cref="Segment.Update"/>.</param>
         /// <returns>A <see cref="CoroutineHandle"/> that can be used to track or control the coroutine's execution.</returns>
-        public static ushort RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update)
+        public static ushort RunCoroutine(IEnumerator<float> coroutine, Segment segment = Segment.Update, string handleGroup = GroupDefault)
         {
             ref var processArray = ref Instance.ProcessPool[(int)segment];
 
@@ -69,6 +72,7 @@ namespace UnityEssentials
             ref var processData = ref processArray.Get(out var processIndex);
             processData.ArrayIndex = processIndex;
             processData.HandleVersion = handleVersion;
+            processData.HandleGroup = handleGroup;
             processData.Coroutine = coroutine;
             processData.WaitUntil = LocalTime;
             processData.Paused = false;
@@ -191,6 +195,21 @@ namespace UnityEssentials
             var processPool = Instance.ProcessPool;
             for (int i = 0; i < processPool.Length; i++)
                 KillAllCoroutines(i);
+        }
+
+        public static void KillAllCoroutines(string handleGroup)
+        {
+            var processPool = Instance.ProcessPool;
+            for (int i = 0; i < processPool.Length; i++)
+            {
+                ref var processArray = ref Instance.ProcessPool[i];
+                for (int j = 0; j < processArray.Count; j++)
+                {
+                    ref var processData = ref processArray.Elements[j];
+                    if (processData.HandleGroup.Equals(handleGroup))
+                        KillCoroutine(ref processData, processArray);
+                }
+            }
         }
 
         /// <summary>
