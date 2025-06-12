@@ -145,7 +145,7 @@ namespace UnityEssentials.Tests
 
             for (int i = 0; i < 100; i++)
             {
-                Timing.RunCoroutine(SimpleCoroutine());
+                Timing.RunCoroutine(SimpleCoroutine(), Segment.Update, "Test");
                 yield return null;
             }
 
